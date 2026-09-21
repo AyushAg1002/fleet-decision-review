@@ -1,0 +1,8 @@
+.git/
+.env*
+node_modules/
+.DS_Store
+*-credentials*
+*-access*
+*.log
+test-results.json

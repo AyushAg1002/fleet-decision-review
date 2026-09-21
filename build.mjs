@@ -1,0 +1,26 @@
+import {readFileSync,writeFileSync,mkdirSync,copyFileSync,rmSync,existsSync,readdirSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const root=path.dirname(fileURLToPath(import.meta.url));
+const read=name=>readFileSync(path.join(root,name),'utf8');
+const data=JSON.parse(read('data.json'));
+assert.equal(data.schema,1);
+assert.equal(data.rows.length,5581);
+assert.equal(data.fingerprint,'3feb1ab3b9f8597921a2dc6499508de772f3629156d3d41c568c255a8569a6f9');
+let html=read('shell.html');
+for(const [marker,file] of [['STYLES','styles.css'],['CORE','core.js'],['APP','app.js'],['SESSION','session.js']])html=html.replace(`/* ${marker} */`,()=>read(file));
+html=html.replace('/* DATA */',()=>'window.FLEET_DATA='+JSON.stringify(data).replaceAll('<','\\u003c')+';');
+assert(!/\/\* (?:STYLES|CORE|APP|SESSION|DATA) \*\//.test(html));
+const output=path.join(root,'.vercel/output');
+if(existsSync(output))rmSync(output,{recursive:true}); // Regenerated build output only.
+const fn=path.join(output,'functions/gateway.func');
+mkdirSync(fn,{recursive:true});
+mkdirSync(path.join(output,'static'),{recursive:true});
+writeFileSync(path.join(fn,'app.html'),html);
+copyFileSync(path.join(root,'server.cjs'),path.join(fn,'server.cjs'));
+copyFileSync(path.join(root,'brief.pdf'),path.join(fn,'brief.pdf'));
+writeFileSync(path.join(fn,'.vc-config.json'),JSON.stringify({runtime:'nodejs22.x',handler:'server.cjs',launcherType:'Nodejs',maxDuration:10,shouldAddHelpers:false}));
+writeFileSync(path.join(output,'config.json'),JSON.stringify({version:3,routes:[{src:'/(.*)',dest:'/gateway'}]}));
+assert.equal(readdirSync(path.join(output,'static')).length,0,'No private or public static bypass');
+console.log(JSON.stringify({rows:data.rows.length,privateHtmlBytes:Buffer.byteLength(html),staticFiles:0}));
